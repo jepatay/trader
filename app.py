@@ -22,17 +22,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Password gate ──────────────────────────────────────────────────────────
+# ── URL key gate ───────────────────────────────────────────────────────────
 
-if not st.session_state.get("authenticated"):
-    st.title("Trading Assistant")
-    pwd = st.text_input("Password", type="password")
-    if st.button("Enter"):
-        if pwd == os.environ.get("APP_PASSWORD", ""):
-            st.session_state.authenticated = True
-            st.rerun()
-        else:
-            st.error("Incorrect password.")
+if st.query_params.get("key") != os.environ.get("APP_KEY", ""):
     st.stop()
 
 st.title("📈 Short-Term Trading Assistant")
