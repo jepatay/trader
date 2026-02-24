@@ -22,6 +22,19 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── Password gate ──────────────────────────────────────────────────────────
+
+if not st.session_state.get("authenticated"):
+    st.title("Trading Assistant")
+    pwd = st.text_input("Password", type="password")
+    if st.button("Enter"):
+        if pwd == os.environ.get("APP_PASSWORD", ""):
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
+    st.stop()
+
 st.title("📈 Short-Term Trading Assistant")
 st.caption("Signals for 1-3 day trades · Not financial advice · Data via Yahoo Finance")
 
