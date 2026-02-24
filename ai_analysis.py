@@ -115,10 +115,46 @@ Be concise, honest, and remember this investor holds for only 1-3 days."""
         }
 
 
-def suggest_tickers(existing: list[str]) -> list[dict]:
-    """
-    Ask GPT-4o to suggest interesting stock tickers to watch.
+_MARKET_CONFIGS = {
+    "us_tech": {
+        "model": "gpt-4o-mini",
+        "count": 5,
+        "focus": (
+            "Focus on US-listed technology and growth stocks (NASDAQ/NYSE). "
+            "Think FAANG+, semiconductors (NVDA, AMD), cloud (MSFT, CRM, SNOW), "
+            "EV (TSLA), and high-momentum biotech. "
+            "Use standard US ticker symbols (e.g. \"AAPL\", \"NVDA\", \"NFLX\")."
+        ),
+    },
+    "danish": {
+        "model": "gpt-4o-mini",
+        "count": 5,
+        "focus": (
+            "Focus exclusively on Danish stocks listed on the OMX Copenhagen Stock Exchange (XCSE). "
+            "Examples: NOVO-B.CO, MAERSK-B.CO, DSV.CO, ORSTED.CO, CARLB.CO, DEMANT.CO. "
+            "IMPORTANT: use Yahoo Finance ticker format with the .CO suffix (e.g. \"NOVO-B.CO\"). "
+            "Only suggest stocks actively traded on the Copenhagen Stock Exchange."
+        ),
+    },
+    "european": {
+        "model": "gpt-4o",
+        "count": 6,
+        "focus": (
+            "Focus on major European stocks across DAX (Germany), CAC 40 (France), "
+            "AEX (Netherlands), FTSE 100 (UK), IBEX (Spain), and OMX Nordic. "
+            "Use Yahoo Finance ticker format with correct suffixes: "
+            ".DE (Xetra), .PA (Paris), .AS (Amsterdam), .L (London), .MC (Madrid). "
+            "Examples: SAP.DE, ASML.AS, LVMH.PA, BP.L, SAN.MC."
+        ),
+    },
+}
 
+
+def suggest_tickers(existing: list[str], market: str = "us_tech") -> list[dict]:
+    """
+    Ask AI to suggest interesting stock tickers to watch.
+
+    market: "us_tech" | "danish" | "european"
     Returns a list of dicts:
       [{"ticker": "AAPL", "name": "Apple Inc.", "reason": "..."}, ...]
     """
@@ -126,25 +162,28 @@ def suggest_tickers(existing: list[str]) -> list[dict]:
     if client is None:
         return []
 
+    cfg = _MARKET_CONFIGS.get(market, _MARKET_CONFIGS["us_tech"])
     existing_str = ", ".join(existing) if existing else "none"
 
     prompt = f"""You are a short-term trading analyst.
-Suggest 6 interesting stocks for short-term trading right now (1-3 day horizon).
+Suggest {cfg['count']} interesting stocks for short-term trading right now (1-3 day horizon).
 Do NOT suggest any of these already on the watchlist: {existing_str}.
+
+{cfg['focus']}
 
 For each stock provide: ticker symbol, full company name, and a brief reason to watch it (max 20 words).
 
 Respond with a JSON object with key "suggestions" containing an array of objects with keys:
-- "ticker": the stock ticker symbol (e.g. "AAPL")
-- "name": full company name (e.g. "Apple Inc.")
+- "ticker": the stock ticker symbol in Yahoo Finance format
+- "name": full company name
 - "reason": brief reason to watch, max 20 words
 
 Focus on stocks with notable momentum, upcoming catalysts, or interesting technical setups."""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
-            max_tokens=600,
+            model=cfg["model"],
+            max_tokens=500,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
         )

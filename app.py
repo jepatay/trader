@@ -9,6 +9,7 @@ import indicators as ind_module
 import ai_analysis
 import watchlist as wl_module
 import os
+from datetime import date
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -28,11 +29,12 @@ if st.query_params.get("key") != os.environ.get("APP_KEY", ""):
 
 _defaults = {
     "watchlist": None,
-    "scan_cache": {},       # ticker -> computed row data
-    "detail_ticker": None,  # ticker currently shown in AI detail panel
-    "ai_detail_cache": {},  # ticker -> ai analysis result
-    "suggestions": None,    # list[dict] from AI suggest
+    "scan_cache": {},         # ticker -> computed row data
+    "detail_ticker": None,    # ticker currently shown in AI detail panel
+    "ai_detail_cache": {},    # ticker -> ai analysis result
+    "suggestions": None,      # list[dict] from AI suggest
     "show_suggestions": False,
+    "suggest_market": "us_tech",  # last market used for suggestions
 }
 for _k, _v in _defaults.items():
     if _k not in st.session_state:
@@ -145,10 +147,32 @@ with st.sidebar:
 
     st.divider()
 
-    if st.button("🤖 AI Suggest Values", use_container_width=True, type="primary"):
-        with st.spinner("Asking AI for suggestions…"):
+    st.caption("🤖 AI Suggest Values")
+    sb1, sb2, sb3 = st.columns(3)
+
+    if sb1.button("🇺🇸 US Tech", use_container_width=True, help="Quick · NASDAQ/NYSE tech & growth"):
+        with st.spinner("Asking AI for US Tech suggestions…"):
+            st.session_state.suggest_market = "us_tech"
             st.session_state.suggestions = ai_analysis.suggest_tickers(
-                existing=st.session_state.watchlist
+                existing=st.session_state.watchlist, market="us_tech"
+            )
+        st.session_state.show_suggestions = True
+        st.rerun()
+
+    if sb2.button("🇩🇰 Danish", use_container_width=True, help="Quick · OMX Copenhagen stocks"):
+        with st.spinner("Asking AI for Danish suggestions…"):
+            st.session_state.suggest_market = "danish"
+            st.session_state.suggestions = ai_analysis.suggest_tickers(
+                existing=st.session_state.watchlist, market="danish"
+            )
+        st.session_state.show_suggestions = True
+        st.rerun()
+
+    if sb3.button("🇪🇺 Europe", use_container_width=True, help="Medium · DAX, CAC40, AEX, FTSE…"):
+        with st.spinner("Asking AI for European suggestions…"):
+            st.session_state.suggest_market = "european"
+            st.session_state.suggestions = ai_analysis.suggest_tickers(
+                existing=st.session_state.watchlist, market="european"
             )
         st.session_state.show_suggestions = True
         st.rerun()
@@ -228,7 +252,9 @@ for tk in st.session_state.watchlist:
     c2.write(cache.get("name", tk))
     c3.markdown(stars_html, unsafe_allow_html=True)
     c4.caption(speed_label)
-    c5.caption(cache.get("context", ""))
+    _ctx     = cache.get("context", "")
+    _ai_date = cache.get("ai_date", "")
+    c5.caption(f"{_ctx}  ·  {_ai_date}" if _ai_date else _ctx)
     if c6.button("🔍 AI Analysis", key=f"ai_{tk}"):
         st.session_state.detail_ticker = tk
         st.rerun()
@@ -255,6 +281,17 @@ if st.session_state.detail_ticker:
                     tk, cache.get("info", {}), cache.get("result", {}), news
                 )
                 st.session_state.ai_detail_cache[tk] = ai_result
+                # Persist a short AI summary + date into the context column
+                _action = ai_result.get("action", "HOLD")
+                _conf   = ai_result.get("confidence", "Low")
+                _words  = ai_result.get("reasoning", "").split()
+                _short  = " ".join(_words[:15]) + ("…" if len(_words) > 15 else "")
+                _today  = date.today().strftime("%d %b %Y")
+                if tk in st.session_state.scan_cache:
+                    st.session_state.scan_cache[tk]["context"] = (
+                        f"AI {_action} · {_conf} — {_short}"
+                    )
+                    st.session_state.scan_cache[tk]["ai_date"] = _today
 
         ai = st.session_state.ai_detail_cache[tk]
         action     = ai.get("action", "HOLD")
@@ -289,7 +326,12 @@ if st.session_state.show_suggestions:
 
     with st.container(border=True):
         col_hdr, col_cls = st.columns([9, 1])
-        col_hdr.subheader("🤖 AI Suggested Values")
+        _mkt_labels = {
+            "us_tech":  "🇺🇸 US Tech Suggestions",
+            "danish":   "🇩🇰 Danish Suggestions",
+            "european": "🇪🇺 European Suggestions",
+        }
+        col_hdr.subheader(_mkt_labels.get(st.session_state.suggest_market, "🤖 AI Suggested Values"))
         if col_cls.button("✕ Close", key="close_sugs"):
             st.session_state.show_suggestions = False
             st.session_state.suggestions = None
